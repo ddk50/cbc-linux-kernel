@@ -261,7 +261,7 @@ static void destroy_inode(struct inode *inode)
 	if (inode->i_sb->s_op->destroy_inode)
 		inode->i_sb->s_op->destroy_inode(inode);
 	else
-		call_rcu(&inode->i_rcu, i_callback);
+		call_rcu(&inode->i_rcu, i_callback);   	
 }
 
 /**
@@ -910,6 +910,7 @@ struct inode *new_inode_pseudo(struct super_block *sb)
 		inode->i_state = 0;
 		spin_unlock(&inode->i_lock);
 		INIT_LIST_HEAD(&inode->i_sb_list);
+		INIT_LIST_HEAD(&inode->i_offset_hash);
 	}
 	return inode;
 }

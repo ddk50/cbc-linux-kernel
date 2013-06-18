@@ -33,6 +33,7 @@
 #include <linux/hardirq.h> /* for BUG_ON(!in_atomic()) only */
 #include <linux/memcontrol.h>
 #include <linux/cleancache.h>
+#include <linux/sha1.h>
 #include "internal.h"
 
 #define CREATE_TRACE_POINTS
@@ -1103,6 +1104,7 @@ static void do_generic_file_read(struct file *filp, loff_t *ppos,
 	struct inode *inode = mapping->host;
 	struct file_ra_state *ra = &filp->f_ra;
 	pgoff_t index;
+	pgoff_t o_index;
 	pgoff_t last_index;
 	pgoff_t prev_index;
 	unsigned long offset;      /* offset into pagecache page */
@@ -1110,6 +1112,7 @@ static void do_generic_file_read(struct file *filp, loff_t *ppos,
 	int error;
 
 	index = *ppos >> PAGE_CACHE_SHIFT;
+	o_index = index;
 	prev_index = ra->prev_pos >> PAGE_CACHE_SHIFT;
 	prev_offset = ra->prev_pos & (PAGE_CACHE_SIZE-1);
 	last_index = (*ppos + desc->count + PAGE_CACHE_SIZE-1) >> PAGE_CACHE_SHIFT;
@@ -1151,6 +1154,10 @@ find_page:
 				goto page_not_up_to_date_locked;
 			unlock_page(page);
 		}
+
+		/* TODO: find radix tree */
+		
+
 page_ok:
 		/*
 		 * i_size must be checked after we know the page is Uptodate.
@@ -1273,7 +1280,7 @@ readpage:
 			}
 			unlock_page(page);
 		}
-
+		
 		goto page_ok;
 
 readpage_error:
@@ -1301,6 +1308,7 @@ no_cached_page:
 			desc->error = error;
 			goto out;
 		}
+		
 		goto readpage;
 	}
 

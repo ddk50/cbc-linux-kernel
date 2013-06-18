@@ -513,6 +513,12 @@ struct posix_acl;
 #define IOP_LOOKUP	0x0002
 #define IOP_NOFOLLOW	0x0004
 
+/* for cas-based inter-file cacheing */
+struct cbc_entry {
+	__u32 checksum;
+	pgoff_t index; /* page num */
+};
+
 /*
  * Keep mostly read-only and often accessed (especially for
  * the RCU path lookup and 'stat' data) fields at the beginning
@@ -607,6 +613,8 @@ struct inode {
 	atomic_t		i_readcount; /* struct files open RO */
 #endif
 	void			*i_private; /* fs or device private pointer */
+
+	struct list_head	i_offset_hash; /* for content-based cache (inter-file cache) */
 };
 
 static inline int inode_unhashed(struct inode *inode)

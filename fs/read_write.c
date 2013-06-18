@@ -22,6 +22,12 @@
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
 
+#include <linux/sha1.h>
+
+void SHA1_test(void);
+int bin2ascii(const void *buf, int buf_len, char *ostr, int max_slen);
+void print_sha1(const char *sha1_buf);
+
 typedef ssize_t (*io_fn_t)(struct file *, char __user *, size_t, loff_t *);
 typedef ssize_t (*iov_fn_t)(struct kiocb *, const struct iovec *,
 		unsigned long, loff_t);
@@ -430,6 +436,13 @@ ssize_t __kernel_write(struct file *file, const char *buf, size_t count, loff_t 
 ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
 {
 	ssize_t ret;
+	struct cbc_entry *cbc;
+	uint8_t *kaddr;
+	struct inode *inode = file->f_inode;
+	pgoff_t index;
+	pgoff_t num_of_page;
+	pgoff_t i;
+	struct page *page;
 
 	if (!(file->f_mode & FMODE_WRITE))
 		return -EBADF;
@@ -437,6 +450,42 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 		return -EINVAL;
 	if (unlikely(!access_ok(VERIFY_READ, buf, count)))
 		return -EFAULT;
+
+	/* 
+	 * create content-based cache entry 
+	 */
+	
+	/* if ((*pos & PAGE_CACHE_MASK) == *pos) { */
+	/* 	i = (*pos >> PAGE_CACHE_SHIFT); */
+	/* } else { */
+	/* 	i = (*pos >> PAGE_CACHE_SHIFT) + 1; */
+	/* } */
+	/* num_of_page = count >> PAGE_CACHE_SHIFT; */
+	
+	/* for ( ; i < num_of_page ; i++) { */
+	/* 	page = __page_cache_alloc(__GFP_COLD); */
+	/* 	if (!page) */
+	/* 		return -ENOMEM; */
+	/* 	cbc = kmalloc(sizeof(struct cbc_entry), GFP_KERNEL); */
+	/* 	if (!cbc) */
+	/* 		return -ENOMEM; */
+		
+	/* 	kaddr = kmap_atomic(page); */
+	/* 	/\* maybe bottol neck *\/ */
+	/* 	copy_from_user(kaddr + i * PAGE_CACHE_SIZE,  */
+	/* 				   buf + i * PAGE_CACHE_SIZE,  */
+	/* 				   PAGE_CACHE_SIZE); */
+
+	/* 	cbc->index    = i; */
+	/* 	cbc->checksum = cbc_crc32_le(kaddr, PAGE_CACHE_SIZE); */
+	/* 	printk(KERN_INFO "0x%08llx (crc:0x%08x)\n", i, cbc->checksum); */
+		
+	/* 	if (radix_tree_insert(&inode->i_cbc_entry_root, i, cbc)) { */
+	/* 		BUG(); */
+	/* 		radix_tree_preload_end(); */
+	/* 	} */
+	/* 	kunmap_atomic(kaddr); */
+	/* }    */
 
 	ret = rw_verify_area(WRITE, file, pos, count);
 	if (ret >= 0) {
@@ -1223,3 +1272,62 @@ COMPAT_SYSCALL_DEFINE4(sendfile64, int, out_fd, int, in_fd,
 	return do_sendfile(out_fd, in_fd, NULL, count, 0);
 }
 #endif
+
+#define BUFSIZE 256
+
+void dump_hex(char *p, int len)
+{   
+    int n = 0;
+    while (len--) {
+        n++ ;
+#ifdef UNIX
+        printk(KERN_INFO "%x%s",*p++ & 0xff,len ? ( (n & 7) ? " " : "-") : "") ;
+#else
+        printk(KERN_INFO "%02x%s",*p++ & 0xff,len ? ( (n & 7) ? " " : "-") : "") ;
+#endif
+    }
+}
+
+void SHA1_test(void)
+{
+	static int count = 0;
+    SHA1_CTX ctx;
+	unsigned char hash[20], buf[BUFSIZE];
+	int i;
+
+	for(i=0;i<BUFSIZE;i++)
+		buf[i] = i;
+	
+	if (++count % 1000) {
+		SHA1Init(&ctx); {
+			SHA1Update(&ctx, buf, BUFSIZE);
+		}; SHA1Final(hash, &ctx);
+		print_sha1(hash);
+	}	
+}
+
+int bin2ascii(const void *buf, int buf_len, char *ostr, int max_slen)
+{
+	static char digitx[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+	int i, j;
+
+	memset(ostr, '\0', max_slen);
+
+	for (i = 0, j = 0 ; i < buf_len ; i++, j += 2) {
+		if (j >= max_slen) {
+			goto err;
+		}
+		ostr[j]	  = digitx[(((uint8_t*)buf)[i] >> 4) & 0xf];
+		ostr[j+1] = digitx[((uint8_t*)buf)[i] & 0xf];
+	}
+	return 1;
+err:
+	return 0;
+}
+
+void print_sha1(const char *sha1_buf)
+{
+	char out[256];
+	bin2ascii(sha1_buf, 20, out, sizeof(out));
+	printk(out);
+}
